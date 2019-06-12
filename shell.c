@@ -128,7 +128,7 @@ int main(int argc, char* argv[])
 		}
 		
 		if (strcmp(tokens[0], "exit") == 0) {
-			return -1;
+			exit(0);
 		}
 		
 		if (strcmp(tokens[0], "pwd") == 0) {
