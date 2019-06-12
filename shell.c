@@ -187,7 +187,7 @@ int main(int argc, char* argv[])
 		 * 3. If in_background is false, parent waits for
 		 *    child to finish. Otherwise, parent loops back to
 		 *    read_command() again immediately.
-		 */zz
+		 */
 
 	}
 	return 0;
