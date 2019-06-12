@@ -10,6 +10,10 @@
 #define COMMAND_LENGTH 1024
 #define NUM_TOKENS (COMMAND_LENGTH / 2 + 1)
 
+#define HISTORY_DEPTH 10
+
+char history[HISTORY_DEPTH][COMMAND_LENGTH];
+int count = 0;
 
 /**
  * Command Input and Processing
@@ -65,16 +69,58 @@ int tokenize_command(char *buff, char *tokens[])
  * in_background: pointer to a boolean variable. Set to true if user entered
  *       an & as their last token; otherwise set to false.
  */
+ 
+ void add_history(char *buff){
+	 
+	 if(count < HISTORY_DEPTH) {
+		 strcpy(history[count], buff);
+	 }
+	 else {
+		 for(int i = 0; i < HISTORY_DEPTH - 1; i++){
+			 strcpy(history[i], history[i+1]);
+		 }
+		 strcpy(history[HISTORY_DEPTH-1], buff);
+	 }
+	 count++;
+ }
+ 
+ void display_history(){
+	int n = count;
+	char count2[10];
+	int index = 0;
+	
+	if(n > HISTORY_DEPTH){
+		n = count - (HISTORY_DEPTH-1);
+	} 
+	else {
+		n = 1;
+	}
+	
+	for (int i = n; i <= count; i++){
+		sprintf(count2, "%d\t", i);
+		write(STDOUT_FILENO, count2, strlen(count2));
+		
+		write(STDOUT_FILENO, history[index], strlen(history[index]));
+		
+		index++;
+	}
+	 
+ }
+ 
 void read_command(char *buff, char *tokens[], _Bool *in_background)
 {
 	*in_background = false;
 
 	// Read input
 	int length = read(STDIN_FILENO, buff, COMMAND_LENGTH-1);
-
+	
 	if (length < 0) {
 		perror("Unable to read command from keyboard. Terminating.\n");
 		exit(-1);
+	}
+	
+	if(strlen(buff) > 0) {
+		add_history(buff);
 	}
 
 	// Null terminate and strip \n.
@@ -96,6 +142,7 @@ void read_command(char *buff, char *tokens[], _Bool *in_background)
 	}
 }
 
+
 /**
  * Main and Execute Commands
  */
@@ -103,6 +150,13 @@ int main(int argc, char* argv[])
 {
 	char input_buffer[COMMAND_LENGTH];
 	char *tokens[NUM_TOKENS];
+<<<<<<< HEAD
+=======
+	int stat_loc;
+	char wd[PATH_MAX];
+	
+	
+>>>>>>> master
 	while (true) {
 
 		// Get command
@@ -111,6 +165,68 @@ int main(int argc, char* argv[])
 		write(STDOUT_FILENO, "> ", strlen("> "));
 		_Bool in_background = false;
 		read_command(input_buffer, tokens, &in_background);
+<<<<<<< HEAD
+=======
+		
+		if (!tokens[0]) {
+			continue;
+		}
+		
+		if (strcmp(tokens[0], "history") == 0) {
+			
+			display_history();
+			continue;
+		}
+		
+		
+		if (strcmp(tokens[0], "exit") == 0) {
+			exit(0);
+		}
+		
+		if (strcmp(tokens[0], "pwd") == 0) {
+				write(STDOUT_FILENO, wd, strlen(wd));
+				write(STDOUT_FILENO, "\n", strlen("\n"));
+				continue;
+		}
+		
+		if (strcmp(tokens[0], "cd") == 0) {
+			if (chdir(tokens[1]) < 0) {
+                write(STDOUT_FILENO, "Invalid directory.\n", strlen("Invalid directory.\n"));	
+            }
+			continue;
+		}
+		
+		
+		pid_t child_pid = fork();
+		if (child_pid < 0){
+			perror("ERROR: Fork failed");
+            exit(1);
+		}
+		
+		if (child_pid == 0){ //child process
+		/* Never returns if the call is successful */
+			if( execvp(tokens[0], tokens) < 0 ) {
+				write(STDOUT_FILENO, tokens[0], strlen(tokens[0]));
+				write(STDOUT_FILENO, ": Unknown command.\n", strlen(": Unknown command.\n"));	
+                exit(1);
+			}
+		}
+		else {
+			if (!in_background) { //ELSE: loop back to read_command
+				waitpid(child_pid, &stat_loc, WUNTRACED);
+			}
+			
+		}
+		
+	
+		
+		//free(tokens);
+		//free(input_buffer);
+		
+		
+		
+		
+>>>>>>> master
 
 		// DEBUG: Dump out arguments:
 		for (int i = 0; tokens[i] != NULL; i++) {
@@ -134,3 +250,5 @@ int main(int argc, char* argv[])
 	}
 	return 0;
 }
+
+
