@@ -8,14 +8,20 @@
 #include <unistd.h>
 #include <sys/wait.h>
 #include <linux/limits.h>
+#include <ctype.h>
 
 #define COMMAND_LENGTH 1024
 #define NUM_TOKENS (COMMAND_LENGTH / 2 + 1)
 
-#define HISTORY_DEPTH 10
 
-char history[HISTORY_DEPTH][COMMAND_LENGTH];
-int count = 0;
+
+#define HISTORY_LENGTH 10
+
+char history[HISTORY_LENGTH][COMMAND_LENGTH];
+int command_count = 0;
+int tracker = 0;
+void add_history(char * tokens[],bool in_background);
+void print_history(void);
 
 /**
  * Command Input and Processing
@@ -49,6 +55,7 @@ int tokenize_command(char *buff, char *tokens[])
 		// Handle other characters (may be start)
 		case '!':
 			tokens[token_count] = "!";
+			//strcpy(tokens[token_count], "!");
 			token_count++;
 			in_token = false;
 			break;
@@ -75,39 +82,13 @@ int tokenize_command(char *buff, char *tokens[])
  * in_background: pointer to a boolean variable. Set to true if user entered
  *       an & as their last token; otherwise set to false.
  */
- 
- void add_history(char *buff){
- 	if (buff != NULL && buff[0] != '\0'){
-	 	int index = (count < HISTORY_DEPTH)?count:(HISTORY_DEPTH-1);
-	 	if(index!=count){
-			for(int i = 0; i < (HISTORY_DEPTH-1); i++){
-				strcpy(history[i], history[i+1]);
-			}
-		}
-		strcpy(history[index], buff);
-		count++;
-	}
- }
- 
- void display_history(){
-	char count2[10];
-	int n = (count>HISTORY_DEPTH)?(count - HISTORY_DEPTH + 1):1;
-	
-	for (int i = n, index = 0; i <= count; i++, index++){
-		sprintf(count2, "%d\t", i);
-		write(STDOUT_FILENO, count2, strlen(count2));
-		write(STDOUT_FILENO, history[index], strlen(history[index]));
-		write(STDOUT_FILENO, "\n", strlen("\n"));
-	}
- }
- 
 void read_command(char *buff, char *tokens[], _Bool *in_background)
 {
 	*in_background = false;
 
 	// Read input
 	int length = read(STDIN_FILENO, buff, COMMAND_LENGTH-1);
-	
+
 	if (length < 0) {
 		perror("Unable to read command from keyboard. Terminating.\n");
 		exit(-1);
@@ -117,10 +98,7 @@ void read_command(char *buff, char *tokens[], _Bool *in_background)
 	buff[length] = '\0';
 	if (buff[strlen(buff) - 1] == '\n') {
 		buff[strlen(buff) - 1] = '\0';
-	}
-
-	if(buff[0] != '!') {
-		add_history(buff);
+		//DO SOMETHING HERE?
 	}
 
 	// Tokenize (saving original command string)
@@ -134,26 +112,7 @@ void read_command(char *buff, char *tokens[], _Bool *in_background)
 		*in_background = true;
 		tokens[token_count - 1] = 0;
 	}
-
-	if (strcmp(tokens[0], "!") == 0){
-		int index = (count > HISTORY_DEPTH)?(HISTORY_DEPTH-1):count;
-		if(strcmp(tokens[1], "!") != 0 || (index-1) < 0){
-			int tar = atoi(tokens[1]);
-			if(tar>0 && tar<=count && tar>(count - HISTORY_DEPTH)){
-				index = (count>=HISTORY_DEPTH)?(HISTORY_DEPTH-count+tar-1):tar;
-		    }
-		}
-		add_history(history[index-1]);
-		char temp[COMMAND_LENGTH];
-		strcpy(temp,history[index-1]);
-        int token_count = tokenize_command(temp, tokens);
-        if(token_count > 0 && strcmp(tokens[token_count-1],"&") == 0){
-        	*in_background = true;
-        	tokens[token_count-1] = 0;
-        }
-	}
 }
-
 
 /**
  * Main and Execute Commands
@@ -164,7 +123,8 @@ int main(int argc, char* argv[])
 	char *tokens[NUM_TOKENS];
 	int stat_loc;
 	char wd[PATH_MAX];
-	
+
+	//memset(history, 0, sizeof(history[HISTORY_LENGTH][COMMAND_LENGTH]) * HISTORY_LENGTH * COMMAND_LENGTH);
 	
 	while (true) {
 
@@ -183,15 +143,17 @@ int main(int argc, char* argv[])
 		if (!tokens[0]) {
 			continue;
 		}
-		
-		if (strcmp(tokens[0], "history") == 0) {
-			display_history();
-			continue;
+
+		if (strcmp(tokens[0], "!!") != 0 ) {
+			add_history(tokens, in_background);
 		}
-		
-		
+
+
+
+
 		if (strcmp(tokens[0], "exit") == 0) {
 			exit(0);
+			return 0;
 		}
 		
 		if (strcmp(tokens[0], "pwd") == 0) {
@@ -206,8 +168,12 @@ int main(int argc, char* argv[])
             }
 			continue;
 		}
-		
-		
+
+		if(strcmp(tokens[0], "history") == 0){
+			print_history();
+			continue;
+		}
+
 		pid_t child_pid = fork();
 		if (child_pid < 0){
 			perror("ERROR: Fork failed");
@@ -229,12 +195,8 @@ int main(int argc, char* argv[])
 			
 		}
 		
-	
-		
 		//free(tokens);
 		//free(input_buffer);
-		
-		
 		
 		
 
@@ -259,4 +221,60 @@ int main(int argc, char* argv[])
 
 	}
 	return 0;
+}
+
+
+void add_history(char * tokens[], bool in_background)
+{
+	if ((tokens[0] != NULL) && (strlen(tokens[0]) != 0)){
+	    char temp[COMMAND_LENGTH] = "";
+	    bool flag = false;
+	    for (int i = 0; tokens[i] != NULL; i++) {
+	    	if (flag){
+	    		strcat(temp, " ");
+	    	}
+	    	strcat(temp, tokens[i]);
+	    	flag = true;
+	    }
+
+	    if(in_background){
+	    	strcat(temp, " &");
+	    }
+
+	    memset(&history[tracker], 0, COMMAND_LENGTH);
+	    memcpy(&history[tracker][0], temp, strlen(temp)+1 );
+
+	    command_count++;
+	    tracker++;
+	  
+	    if (tracker > 9){
+	    	tracker = 0;
+	    }
+	}
+}
+
+void print_history()
+{
+	int index = 0;
+  	if (command_count > 9){
+    	index = command_count%10;
+  	}
+
+  	for(int i=0 ; (i<10 && strcmp(history[i],"")!= 0); i++){
+    	char buff[2];
+    	int temp = i;
+    	int num = ( command_count > 10 ) ? (command_count - (9-temp)) : (temp+1) ;
+    	
+	    sprintf(buff, "%i", num );
+	    write(STDOUT_FILENO, buff, strlen(buff));
+	    write(STDOUT_FILENO, "\t", strlen("\t"));
+	    write(STDOUT_FILENO, (history[index]), strlen( (history[index]) ));
+	    write(STDOUT_FILENO, "\n", strlen("\n"));
+
+	    index++;
+	    index = index%10;
+
+  }
+
+
 }
