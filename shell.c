@@ -6,6 +6,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <sys/wait.h>
+#include <linux/limits.h>
 
 #define COMMAND_LENGTH 1024
 #define NUM_TOKENS (COMMAND_LENGTH / 2 + 1)
@@ -81,6 +83,7 @@ void read_command(char *buff, char *tokens[], _Bool *in_background)
 	buff[length] = '\0';
 	if (buff[strlen(buff) - 1] == '\n') {
 		buff[strlen(buff) - 1] = '\0';
+		//DO SOMETHING HERE?
 	}
 
 	// Tokenize (saving original command string)
@@ -103,16 +106,71 @@ int main(int argc, char* argv[])
 {
 	char input_buffer[COMMAND_LENGTH];
 	char *tokens[NUM_TOKENS];
+	int stat_loc;
+	char wd[PATH_MAX];
+	
 	while (true) {
 
 		// Get command
 		// Use write because we need to use read() to work with
 		// signals, and read() is incompatible with printf().
+		if(getcwd(wd, sizeof(wd)) == NULL){
+				perror("ERROR: getcwd");
+		}
+			
+		write(STDOUT_FILENO, wd, strlen(wd));
 		write(STDOUT_FILENO, "> ", strlen("> "));
 		_Bool in_background = false;
 		read_command(input_buffer, tokens, &in_background);
+		
+		if (!tokens[0]) {
+			continue;
+		}
+		
+		if (strcmp(tokens[0], "exit") == 0) {
+			return -1;
+		}
+		
+		if (strcmp(tokens[0], "pwd") == 0) {
+				write(STDOUT_FILENO, wd, strlen(wd));
+				write(STDOUT_FILENO, "\n", strlen("\n"));
+				continue;
+		}
+		
+		if (strcmp(tokens[0], "cd") == 0) {
+			if (chdir(tokens[1]) < 0) {
+                perror(tokens[1]);
+            }
+			continue;
+		}
+		
+		
+		pid_t child_pid = fork();
+		if (child_pid < 0){
+			perror("ERROR: Fork failed");
+            exit(1);
+		}
+		
+		if (child_pid == 0){ //child process
+		/* Never returns if the call is successful */
+			if( execvp(tokens[0], tokens) < 0 ) {
+				perror(tokens[0]);
+                exit(1);
+			}
+		}
+		else {
+			if (!in_background) { //ELSE: loop back to read_command
+				waitpid(child_pid, &stat_loc, WUNTRACED);
+			}
+			
+		}
+		
+		//free(tokens);
+		//free(input_buffer);
+		
+		
 
-		// DEBUG: Dump out arguments:
+		/* // DEBUG: Dump out arguments:
 		for (int i = 0; tokens[i] != NULL; i++) {
 			write(STDOUT_FILENO, "   Token: ", strlen("   Token: "));
 			write(STDOUT_FILENO, tokens[i], strlen(tokens[i]));
@@ -120,7 +178,7 @@ int main(int argc, char* argv[])
 		}
 		if (in_background) {
 			write(STDOUT_FILENO, "Run in background.", strlen("Run in background."));
-		}
+		}  */
 
 		/**
 		 * Steps For Basic Shell:
