@@ -14,6 +14,9 @@
 
 #define HISTORY_DEPTH 10
 
+char history[HISTORY_DEPTH][COMMAND_LENGTH];
+int count = 0;
+
 /**
  * Command Input and Processing
  */
@@ -68,23 +71,64 @@ int tokenize_command(char *buff, char *tokens[])
  * in_background: pointer to a boolean variable. Set to true if user entered
  *       an & as their last token; otherwise set to false.
  */
+ 
+ void add_history(char *buff){
+	 
+	 if(count < HISTORY_DEPTH) {
+		 strcpy(history[count], buff);
+	 }
+	 else {
+		 for(int i = 0; i < HISTORY_DEPTH - 1; i++){
+			 strcpy(history[i], history[i+1]);
+		 }
+		 strcpy(history[HISTORY_DEPTH-1], buff);
+	 }
+	 count++;
+ }
+ 
+ void display_history(){
+	int n = count;
+	char count2[10];
+	int index = 0;
+	
+	if(n > HISTORY_DEPTH){
+		n = count - (HISTORY_DEPTH-1);
+	} 
+	else {
+		n = 1;
+	}
+	
+	for (int i = n; i <= count; i++){
+		sprintf(count2, "%d\t", i);
+		write(STDOUT_FILENO, count2, strlen(count2));
+		
+		write(STDOUT_FILENO, history[index], strlen(history[index]));
+		
+		index++;
+	}
+	 
+ }
+ 
 void read_command(char *buff, char *tokens[], _Bool *in_background)
 {
 	*in_background = false;
 
 	// Read input
 	int length = read(STDIN_FILENO, buff, COMMAND_LENGTH-1);
-
+	
 	if (length < 0) {
 		perror("Unable to read command from keyboard. Terminating.\n");
 		exit(-1);
+	}
+	
+	if(strlen(buff) > 0) {
+		add_history(buff);
 	}
 
 	// Null terminate and strip \n.
 	buff[length] = '\0';
 	if (buff[strlen(buff) - 1] == '\n') {
 		buff[strlen(buff) - 1] = '\0';
-		//DO SOMETHING HERE?
 	}
 
 	// Tokenize (saving original command string)
@@ -100,6 +144,7 @@ void read_command(char *buff, char *tokens[], _Bool *in_background)
 	}
 }
 
+
 /**
  * Main and Execute Commands
  */
@@ -110,7 +155,6 @@ int main(int argc, char* argv[])
 	int stat_loc;
 	char wd[PATH_MAX];
 	
-	//char history[HISTORY_DEPTH][COMMAND_LENGTH];
 	
 	while (true) {
 
@@ -131,8 +175,11 @@ int main(int argc, char* argv[])
 		}
 		
 		if (strcmp(tokens[0], "history") == 0) {
-			write(STDOUT_FILENO, "watda", strlen("watda"));
+			
+			display_history();
+			continue;
 		}
+		
 		
 		if (strcmp(tokens[0], "exit") == 0) {
 			exit(0);
@@ -173,12 +220,12 @@ int main(int argc, char* argv[])
 			
 		}
 		
-		while (waitpid(-1, NULL, WNOHANG) > 0) {
-			;			// do nothing.
-		}
+	
 		
 		//free(tokens);
 		//free(input_buffer);
+		
+		
 		
 		
 
@@ -204,3 +251,5 @@ int main(int argc, char* argv[])
 	}
 	return 0;
 }
+
+
