@@ -139,7 +139,7 @@ int main(int argc, char* argv[])
 		
 		if (strcmp(tokens[0], "cd") == 0) {
 			if (chdir(tokens[1]) < 0) {
-                perror(tokens[1]);
+                write(STDOUT_FILENO, "Invalid directory.\n", strlen("Invalid directory.\n"));	
             }
 			continue;
 		}
@@ -154,7 +154,8 @@ int main(int argc, char* argv[])
 		if (child_pid == 0){ //child process
 		/* Never returns if the call is successful */
 			if( execvp(tokens[0], tokens) < 0 ) {
-				perror(tokens[0]);
+				write(STDOUT_FILENO, tokens[0], strlen(tokens[0]));
+				write(STDOUT_FILENO, ": Unknown command.\n", strlen(": Unknown command.\n"));	
                 exit(1);
 			}
 		}
