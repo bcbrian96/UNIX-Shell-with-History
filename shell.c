@@ -12,6 +12,7 @@
 #define COMMAND_LENGTH 1024
 #define NUM_TOKENS (COMMAND_LENGTH / 2 + 1)
 
+#define HISTORY_DEPTH 10
 
 /**
  * Command Input and Processing
@@ -109,6 +110,8 @@ int main(int argc, char* argv[])
 	int stat_loc;
 	char wd[PATH_MAX];
 	
+	//char history[HISTORY_DEPTH][COMMAND_LENGTH];
+	
 	while (true) {
 
 		// Get command
@@ -125,6 +128,10 @@ int main(int argc, char* argv[])
 		
 		if (!tokens[0]) {
 			continue;
+		}
+		
+		if (strcmp(tokens[0], "history") == 0) {
+			write(STDOUT_FILENO, "watda", strlen("watda"));
 		}
 		
 		if (strcmp(tokens[0], "exit") == 0) {
@@ -164,6 +171,10 @@ int main(int argc, char* argv[])
 				waitpid(child_pid, &stat_loc, WUNTRACED);
 			}
 			
+		}
+		
+		while (waitpid(-1, NULL, WNOHANG) > 0) {
+			;			// do nothing.
 		}
 		
 		//free(tokens);
