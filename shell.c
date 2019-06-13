@@ -97,9 +97,9 @@ void add_history(char *buff){
 }
  
 void display_history(){
-	if(count==0){
-		write(STDOUT_FILENO, "No commands in history.\n", strlen("No commands in history.\n"));
-	}
+	// if(count==0){
+	// 	write(STDOUT_FILENO, "No commands in history.\n", strlen("No commands in history.\n"));
+	// }
 	char count2[10];
 	int n = (count>HISTORY_DEPTH)?(count - HISTORY_DEPTH + 1):1;
 	
@@ -163,7 +163,7 @@ int main(int argc, char* argv[]){
 	struct sigaction s;
 	s.sa_handler = sigint_handler;
 	sigemptyset(&s.sa_mask);
-	s.sa_flags = SA_NOCLDSTOP;
+	s.sa_flags = SA_RESTART;
 	sigaction(SIGINT, &s, NULL);
 	
 	
@@ -180,7 +180,6 @@ int main(int argc, char* argv[]){
 		write(STDOUT_FILENO, "> ", strlen("> "));
 		_Bool in_background = false;
 		read_command(input_buffer, tokens, &in_background);
-		
 		if (!tokens[0]) {
 			continue;
 		}
@@ -213,11 +212,6 @@ int main(int argc, char* argv[]){
 			}
 		}
 		
-		if (strcmp(tokens[0], "history") == 0) {
-			display_history();
-			continue;
-		}
-		
 		
 		if (strcmp(tokens[0], "exit") == 0) {
 			exit(0);
@@ -233,6 +227,11 @@ int main(int argc, char* argv[]){
 			if (chdir(tokens[1]) < 0) {
 				write(STDOUT_FILENO, "Invalid directory.\n", strlen("Invalid directory.\n"));	
 			}
+			continue;
+		}
+
+		if (strcmp(tokens[0], "history") == 0) {
+			display_history();
 			continue;
 		}
 		
@@ -260,6 +259,8 @@ int main(int argc, char* argv[]){
 				waitpid(child_pid, &loc, WUNTRACED);
 			}
 		}
+		while (waitpid(-1, NULL, WNOHANG) > 0) ; // do nothing.
+
 	}
 	return 0;
 }
