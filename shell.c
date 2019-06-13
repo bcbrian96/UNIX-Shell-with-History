@@ -250,7 +250,7 @@ int main(int argc, char* argv[]){
 					write(STDOUT_FILENO, "SHELL: Unknown history command.\n", strlen("SHELL: Unknown history command.\n"));
 				}else{
 					write(STDOUT_FILENO, tokens[0], strlen(tokens[0]));
-					write(STDOUT_FILENO, "SHELL: Unknown command.\n", strlen("SHELL: Unknown command.\n"));	
+					write(STDOUT_FILENO, ": Unknown command.\n", strlen(": Unknown command.\n"));	
 				}
 				exit(1);
 			}
