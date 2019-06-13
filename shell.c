@@ -8,6 +8,8 @@
 #include <unistd.h>
 #include <sys/wait.h>
 #include <linux/limits.h>
+#include <signal.h>
+#include <errno.h>
 
 #define COMMAND_LENGTH 1024
 #define NUM_TOKENS (COMMAND_LENGTH / 2 + 1)
@@ -46,12 +48,15 @@ int tokenize_command(char *buff, char *tokens[])
 			buff[i] = '\0';
 			in_token = false;
 			break;
-		// Handle other characters (may be start)
-		case '!':
+			
+		case '!': //special case to tokenize !n
 			tokens[token_count] = "!";
 			token_count++;
 			in_token = false;
 			break;
+
+
+		// Handle other characters (may be start)
 		default:
 			if (!in_token) {
 				tokens[token_count] = &buff[i];
@@ -76,20 +81,25 @@ int tokenize_command(char *buff, char *tokens[])
  *       an & as their last token; otherwise set to false.
  */
  
- void add_history(char *buff){
- 	if (buff != NULL && buff[0] != '\0'){
-	 	int index = (count < HISTORY_DEPTH)?count:(HISTORY_DEPTH-1);
-	 	if(index!=count){
+void add_history(char *buff){
+	char target[COMMAND_LENGTH];
+	strcpy(target,buff);
+	if (buff != NULL && buff[0] != '\0'){
+		int index = (count < HISTORY_DEPTH)?count:(HISTORY_DEPTH-1);
+		if(index!=count){
 			for(int i = 0; i < (HISTORY_DEPTH-1); i++){
 				strcpy(history[i], history[i+1]);
 			}
 		}
-		strcpy(history[index], buff);
+		strcpy(history[index], target);
 		count++;
 	}
- }
+}
  
- void display_history(){
+void display_history(){
+	if(count==0){
+		write(STDOUT_FILENO, "No commands in history.\n", strlen("No commands in history.\n"));
+	}
 	char count2[10];
 	int n = (count>HISTORY_DEPTH)?(count - HISTORY_DEPTH + 1):1;
 	
@@ -99,18 +109,17 @@ int tokenize_command(char *buff, char *tokens[])
 		write(STDOUT_FILENO, history[index], strlen(history[index]));
 		write(STDOUT_FILENO, "\n", strlen("\n"));
 	}
- }
+}
  
-void read_command(char *buff, char *tokens[], _Bool *in_background)
-{
+void read_command(char *buff, char *tokens[], _Bool *in_background){
 	*in_background = false;
 
 	// Read input
 	int length = read(STDIN_FILENO, buff, COMMAND_LENGTH-1);
 	
-	if (length < 0) {
-		perror("Unable to read command from keyboard. Terminating.\n");
-		exit(-1);
+	if ( (length < 0) && (errno !=EINTR) ){
+		perror("Unable to read command. Terminating.\n");
+		exit(-1);  /* terminate with error */
 	}
 
 	// Null terminate and strip \n.
@@ -119,7 +128,7 @@ void read_command(char *buff, char *tokens[], _Bool *in_background)
 		buff[strlen(buff) - 1] = '\0';
 	}
 
-	if(buff[0] != '!') {
+	if(strlen(buff) > 0 && buff[0] != '!') {
 		add_history(buff);
 	}
 
@@ -134,39 +143,31 @@ void read_command(char *buff, char *tokens[], _Bool *in_background)
 		*in_background = true;
 		tokens[token_count - 1] = 0;
 	}
+}
 
-	if (strcmp(tokens[0], "!") == 0){
-		int index = (count > HISTORY_DEPTH)?(HISTORY_DEPTH-1):count;
-		if(strcmp(tokens[1], "!") != 0 || (index-1) < 0){
-			int tar = atoi(tokens[1]);
-			if(tar>0 && tar<=count && tar>(count - HISTORY_DEPTH)){
-				index = (count>=HISTORY_DEPTH)?(HISTORY_DEPTH-count+tar-1):tar;
-		    }
-		}
-		add_history(history[index-1]);
-		char temp[COMMAND_LENGTH];
-		strcpy(temp,history[index-1]);
-        int token_count = tokenize_command(temp, tokens);
-        if(token_count > 0 && strcmp(tokens[token_count-1],"&") == 0){
-        	*in_background = true;
-        	tokens[token_count-1] = 0;
-        }
-	}
+void sigint_handler() {
+	write(STDOUT_FILENO, "\n", strlen("\n"));
+	display_history();
 }
 
 
 /**
  * Main and Execute Commands
  */
-int main(int argc, char* argv[])
-{
+int main(int argc, char* argv[]){
 	char input_buffer[COMMAND_LENGTH];
 	char *tokens[NUM_TOKENS];
-	int stat_loc;
+	int loc;
 	char wd[PATH_MAX];
 	
+	struct sigaction s;
+	s.sa_handler = sigint_handler;
+	sigemptyset(&s.sa_mask);
+	s.sa_flags = 0;
+	sigaction(SIGINT, &s, NULL);
 	
-	while (true) {
+	
+	while (true){
 
 		// Get command
 		// Use write because we need to use read() to work with
@@ -182,6 +183,34 @@ int main(int argc, char* argv[])
 		
 		if (!tokens[0]) {
 			continue;
+		}
+
+		if (strcmp(tokens[0], "!") == 0 && tokens[1] && !tokens[2]){
+			bool flag = true;
+			int index = (count > HISTORY_DEPTH)?(HISTORY_DEPTH):count;
+			
+			if(strcmp(tokens[1], "!") != 0 || (index-1) < 0){
+				int tar = atoi(tokens[1]);
+				if(tar>0 && tar<=count && tar > (count - HISTORY_DEPTH)){
+					index = (count>=HISTORY_DEPTH)?(HISTORY_DEPTH-count+tar):tar;
+				}else{
+					flag = false;
+				}
+			}
+			if(flag){
+				char temp[COMMAND_LENGTH];
+				strcpy(temp,history[index-1]);
+				add_history(history[index-1]);
+				
+				write(STDOUT_FILENO, temp, strlen(temp));
+				write(STDOUT_FILENO, "\n", strlen("\n"));
+				
+				int token_count = tokenize_command(temp, tokens);
+				if(token_count > 0 && strcmp(tokens[token_count-1],"&") == 0){
+					in_background = true;
+					tokens[token_count-1] = 0;
+				}
+			}
 		}
 		
 		if (strcmp(tokens[0], "history") == 0) {
@@ -202,12 +231,12 @@ int main(int argc, char* argv[])
 		
 		if (strcmp(tokens[0], "cd") == 0) {
 			if (chdir(tokens[1]) < 0) {
-                write(STDOUT_FILENO, "Invalid directory.\n", strlen("Invalid directory.\n"));	
-            }
+				write(STDOUT_FILENO, "Invalid directory.\n", strlen("Invalid directory.\n"));	
+			}
 			continue;
 		}
 		
-		
+
 		pid_t child_pid = fork();
 		if (child_pid < 0){
 			perror("ERROR: Fork failed");
@@ -215,7 +244,7 @@ int main(int argc, char* argv[])
 		}
 		
 		if (child_pid == 0){ //child process
-		/* Never returns if the call is successful */
+		
 			if( execvp(tokens[0], tokens) < 0 ) {
 				write(STDOUT_FILENO, tokens[0], strlen(tokens[0]));
 				write(STDOUT_FILENO, ": Unknown command.\n", strlen(": Unknown command.\n"));	
@@ -224,39 +253,9 @@ int main(int argc, char* argv[])
 		}
 		else {
 			if (!in_background) { //ELSE: loop back to read_command
-				waitpid(child_pid, &stat_loc, WUNTRACED);
+				waitpid(child_pid, &loc, WUNTRACED);
 			}
-			
 		}
-		
-	
-		
-		//free(tokens);
-		//free(input_buffer);
-		
-		
-		
-		
-
-		/* // DEBUG: Dump out arguments:
-		for (int i = 0; tokens[i] != NULL; i++) {
-			write(STDOUT_FILENO, "   Token: ", strlen("   Token: "));
-			write(STDOUT_FILENO, tokens[i], strlen(tokens[i]));
-			write(STDOUT_FILENO, "\n", strlen("\n"));
-		}
-		if (in_background) {
-			write(STDOUT_FILENO, "Run in background.", strlen("Run in background."));
-		}  */
-
-		/**
-		 * Steps For Basic Shell:
-		 * 1. Fork a child process
-		 * 2. Child process invokes execvp() using results in token array.
-		 * 3. If in_background is false, parent waits for
-		 *    child to finish. Otherwise, parent loops back to
-		 *    read_command() again immediately.
-		 */
-
 	}
 	return 0;
 }
