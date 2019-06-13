@@ -163,7 +163,7 @@ int main(int argc, char* argv[]){
 	struct sigaction s;
 	s.sa_handler = sigint_handler;
 	sigemptyset(&s.sa_mask);
-	s.sa_flags = 0;
+	s.sa_flags = SA_NOCLDSTOP;
 	sigaction(SIGINT, &s, NULL);
 	
 	
@@ -246,9 +246,13 @@ int main(int argc, char* argv[]){
 		if (child_pid == 0){ //child process
 		
 			if( execvp(tokens[0], tokens) < 0 ) {
-				write(STDOUT_FILENO, tokens[0], strlen(tokens[0]));
-				write(STDOUT_FILENO, ": Unknown command.\n", strlen(": Unknown command.\n"));	
-                exit(1);
+				if(strcmp(tokens[0],"!")==0){
+					write(STDOUT_FILENO, "SHELL: Unknown history command.\n", strlen("SHELL: Unknown history command.\n"));
+				}else{
+					write(STDOUT_FILENO, tokens[0], strlen(tokens[0]));
+					write(STDOUT_FILENO, "SHELL: Unknown command.\n", strlen("SHELL: Unknown command.\n"));	
+				}
+				exit(1);
 			}
 		}
 		else {
